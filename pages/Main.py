@@ -70,7 +70,7 @@ else:
 # ---------------------------------------------------------------------------- #
 #                               F U N C T I O N S                              #
 # ---------------------------------------------------------------------------- #
-@st.cache_data
+
 def get_context() -> dict:
     df = st.session_state["df"]
     file_name = st.session_state["file_name"]
