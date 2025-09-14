@@ -3,33 +3,68 @@
 # ---------------------------------------------------------------------------- #
 import streamlit as st
 import random as rd
-
+import pandas as pd
 import re
 from langchain.prompts import PromptTemplate
-from langchain_groq import ChatGroq
 from langchain_core.output_parsers import StrOutputParser
-
+from langchain_groq import ChatGroq
 from pydantic import BaseModel, Field
 from typing import List
 
 # ---------------------------------------------------------------------------- #
 
+if "context" not in st.session_state:
+    st.session_state["context"] = None
+
+if "questions" not in st.session_state:
+    st.session_state["questions"] = None
+
+if "API" not in st.session_state:
+    st.session_state["API"] = None
+
+if "df" not in st.session_state:
+    st.session_state["df"] = None
+
+if "file_name" not in st.session_state:
+    st.session_state["file_name"] = None
+
+
+with st.sidebar:
+    with st.form("Start"):
+        file = st.file_uploader("Upload data", ["csv"])
+
+        # ---------------------------------------------------------------------------- #
+        API = st.text_input("Enter Groq  API Key", type="password")
+        st.caption("""Get your Groq API key [here](https://console.groq.com/keys)""")
+
+        if st.form_submit_button("Submit"):
+            if file is not None:
+                st.session_state["file_name"] = file.name
+                st.session_state["df"] = pd.read_csv(file)
+            else:
+                st.write("Enter valid file")
+            if API is not None:
+                st.session_state["API"] = API
+            else:
+                st.write("Enter valid API")
+
+
 class ListFormatter(BaseModel):
     questions: List[str] = Field(description="List of data analysis questions")
 
 
-if st.session_state["API"] is not None:
-    llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
-    temperature=0.6,
-    api_key=st.session_state.API,
-    # model_kwargs={
-    #     "reasoning_format" : "hidden"
-    # }
-)
+if st.session_state["API"] is not None and st.session_state["API"].strip() != "":
+    # pyright: ignore[reportCallIssue]
 
+    llm = ChatGroq(
+        api_key=st.session_state["API"],
+        model="llama-3.3-70b-versatile",
+        temperature=0.3,
+    )
 
     llm_list_format = llm.with_structured_output(ListFormatter)
+else:
+    st.write("Please enter API key")
 
 
 # ---------------------------------------------------------------------------- #
@@ -37,7 +72,6 @@ if st.session_state["API"] is not None:
 # ---------------------------------------------------------------------------- #
 @st.cache_data
 def get_context() -> dict:
-
     df = st.session_state["df"]
     file_name = st.session_state["file_name"]
     columns = str(df.columns.tolist())
@@ -95,25 +129,30 @@ def get_answer(user_prompt: str):
     )
 
 
-@st.cache_resource
 def get_questions():
-    question_gen_prompt_template = """Based on the following info extracted from a data set, write interesting questions 
-    a data analyst can plot, present your output only in the following format:
-    ['Question1', 'Question2', 'Question3']
-    also do not use apostrophes in the output.
-    eg: ['What is the average age of customers?', 'How many unique products are sold?', 'Correlation between attendance and exam score?']
-    
+    question_gen_prompt_template = """
+    Based on the following dataset info, generate 10 interesting questions 
+    that a data analyst could explore.
+
+    Return your answer as a JSON object with the key "questions", like this:
+    {{
+      "questions": [
+        "What is the average age of customers?",
+        "How many unique products are sold?",
+        "Which location has the highest purchase amount?"
+      ]
+    }}
+
     Data Name: {file_name}
     Numerical Columns: {numerical_columns}
-    Categorical Columns: {categorical_columns} 
+    Categorical Columns: {categorical_columns}
     """
-    
-    
+
     question_gen_prompt = PromptTemplate.from_template(question_gen_prompt_template)
-    
-    llm_list_format = llm.with_structured_output(ListFormatter)
-    
-    question_gen_chain = question_gen_prompt | llm_list_format
+
+    llm_json = llm.with_structured_output(ListFormatter)  # <-- now works
+
+    question_gen_chain = question_gen_prompt | llm_json
 
     result = question_gen_chain.invoke(
         {
@@ -122,17 +161,12 @@ def get_questions():
             "categorical_columns": st.session_state["context"]["categorical_columns"],
         }
     )
-    
-    # Safely extract questions
-    if hasattr(result, "questions"):
-        return result.questions # pyright: ignore[reportAttributeAccessIssue]
-    elif isinstance(result, dict) and "questions" in result:
-        return result["questions"]
-    else:
-        return []
+
+    return result.questions  # pyright: ignore[reportAttributeAccessIssue]
 
 
 # ---------------------------------------------------------------------------- #
+
 
 @st.cache_data
 def execute(response):
@@ -149,10 +183,10 @@ def execute(response):
 # ---------------------------------------------------------------------------- #
 #                                    Status                                    #
 # ---------------------------------------------------------------------------- #
-st.image("./assets/banner.png", )
-if (st.session_state["df"] is not None) & (
-    st.session_state["API"] is not None
-):
+st.image(
+    "./assets/banner.png",
+)
+if (st.session_state["df"] is not None) & (st.session_state["API"] is not None):
     with st.status("Loading", expanded=True) as status:
         if st.session_state["context"] is None:
             st.session_state["context"] = get_context()
