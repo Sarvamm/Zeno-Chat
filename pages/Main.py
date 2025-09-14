@@ -6,7 +6,7 @@ import random as rd
 
 import re
 from langchain.prompts import PromptTemplate
-from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 from langchain_core.output_parsers import StrOutputParser
 
 from pydantic import BaseModel, Field
@@ -18,11 +18,16 @@ class ListFormatter(BaseModel):
     questions: List[str] = Field(description="List of data analysis questions")
 
 
-if st.session_state["selected_model"] is not None:
-    llm = ChatOllama(
-        model=st.session_state["selected_model"],
-        temperature=0.6,
-    )
+if st.session_state["API"] is not None:
+    llm = ChatGroq(
+    model="llama-3.3-70b-versatile",
+    temperature=0.6,
+    api_key=st.session_state.API,
+    # model_kwargs={
+    #     "reasoning_format" : "hidden"
+    # }
+)
+
 
     llm_list_format = llm.with_structured_output(ListFormatter)
 
@@ -146,7 +151,7 @@ def execute(response):
 # ---------------------------------------------------------------------------- #
 st.image("./assets/banner.png", )
 if (st.session_state["df"] is not None) & (
-    st.session_state["selected_model"] is not None
+    st.session_state["API"] is not None
 ):
     with st.status("Loading", expanded=True) as status:
         if st.session_state["context"] is None:

@@ -15,9 +15,8 @@ if "context" not in st.session_state:
 if "questions" not in st.session_state:
     st.session_state["questions"] = None
 
-avl_models = [i.model for i in ollama.list().models]
-if "selected_model" not in st.session_state:
-    st.session_state["selected_model"] = avl_models[0] if avl_models else None
+if "API" not in st.session_state:
+    st.session_state["API"] = None
 
 if "df" not in st.session_state:
     st.session_state["df"] = None
@@ -29,13 +28,14 @@ if "file_name" not in st.session_state:
 with st.sidebar:
     with st.form("Start", clear_on_submit=True, enter_to_submit=False, border=True):
         file = st.file_uploader("Upload data", ["csv"])
-        selected_model = st.selectbox("Choose a model", options=avl_models)
+        API = st.text_input("Enter Groq  API Key", type="password")
+        st.caption("""Get your Groq API key [here](https://console.groq.com/home)""")
 
         if st.form_submit_button("Submit"):
             if file is not None:
                 st.session_state["file_name"] = file.name
                 st.session_state["df"] = pd.read_csv(file)
-            st.session_state["selected_model"] = selected_model
+            st.session_state["API"] = API
 
 
 # ---------------------------------------------------------------------------- #
